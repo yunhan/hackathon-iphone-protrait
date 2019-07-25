@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<title>
+		LKG for Portrait Photos
+	</title>
+	<style>
+		body {
+			font-family: Monospace;
+			background-color: #000;
+			color: #fff;
+			margin: 0px;
+			overflow: hidden;
+		}
+
+		;
+	</style>
+</head>
+
+<body>
+	<input type="file" id="file-browser" name="file">
+
+	<script src="js/three.js"></script>
+	<script src="js/holoplaydpt.js?" + new Date().getTime()></script>
+	<script src="/socket.io/socket.io.js"></script>
+
+	<script>
+		var socket = io();
+
+
+		document.addEventListener("DOMContentLoaded", function () {
+			// Handler when the DOM is fully loaded
+			socket.emit('protrait', 'hello');
+			console.log('123')
+		});
+
+
+
+		//Basic elements for a Three.js/HoloPlay scene
+		var scene, camera, renderer, holoplay;
+
+		//Lighting elements
+		var ambientLight;
+		var zoom = 40;
+		var canvas = null;
+		var ctx = null;
+		var canvasr = null;
+		var ctxr = null;
+
+		//Scene objects
+		var geometry;
+		var material;
+		var plane;
+		var textured;
+		var texture;
+		var image;
+		var ChangeCanvas = true;
+		var files;
+		var filenum = 0;
+		var filecur = 0;
+		var mousedown = false;
+		var onPointerDownPointerX0;
+		var onPointerDownPointerY0;
+		var curx = 0;
+		var cury = 0;
+		var btnenable = true;
+		var orient = 0;
+
+		//Initialize our variables
+		function init() {
+			renderer = new THREE.WebGLRenderer();
+			renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			document.body.appendChild(renderer.domElement);
+
+			scene = new THREE.Scene();
+
+			camera = new THREE.PerspectiveCamera(zoom, window.innerWidth / window.innerHeight, 1, 1000);
+			camera.position.set(curx, cury, 70);
+			scene.add(camera);
+
+			geometry = new THREE.PlaneGeometry(96, 60, 256, 256);
+
+			texture = loadtex('opene.jpg');
+			textured = loadtex('depth.jpg');
+
+			material = new THREE.MeshBasicMaterial({
+				map: texture,              // �e�N�X�`��
+			});
+			plane = new THREE.Mesh(geometry, material);
+			plane.geometry.verticesNeedUpdate = true;
+			plane.scale.set(1, 1, 1);
+			scene.add(plane);
+
+			holoplay = new HoloPlay(scene, camera, renderer);
+			holoplay.setConf(30, 50, 0);
+
+
+			window.addEventListener("dragover", onCancel, false);
+			window.addEventListener("dragenter", onCancel, false);
+			window.addEventListener("drop", onDropFile, false);
+
+		}
+
+		function patternsearch(U8ABuf, U8APat, nOffset) {
+			var nCur = nOffset;
+			var result = 0;
+
+			while (nCur <= U8ABuf.length - U8APat.length) {
+				var add = 0;
+				var mat = 1;
+				for (var i = 0; i < U8APat.length; i++) {
+					if (U8APat[0] == U8ABuf[nCur + i]) {
+						add = i;
+					}
+					if (U8APat[i] != U8ABuf[nCur + i]) {
+						mat = 0;
+					}
+					if (add != 0 && mat == 0) {
+						break;
+					}
+				}
+				if (mat == 1) {
+					result = nCur;
+					break;
+				}
+				if (add == 0) {
+					add = U8APat.length;
+				}
+				nCur += add;
+			}
+
+			return result;
+		}
+
+		function depthtojpg(i_u8aDepth) {
+			var pattern = [0xFF, 0xD8, 0xFF, 0xE1];
+			var nOff = Math.round(i_u8aDepth.length / 2);
+			var dptsdr = patternsearch(i_u8aDepth, pattern, nOff);
+			console.log("length=" + nOff + "," + dptsdr);
+			var dptjpg = null;
+			if (dptsdr > 0) {
+				dptjpg = i_u8aDepth.subarray(dptsdr, i_u8aDepth.length);
+				pattern = [0x64, 0x65, 0x70, 0x74, 0x68];
+				var dptcheck = patternsearch(dptjpg, pattern, 0);
+				if (dptcheck == 0) dptjpg = null;
+			}
+			return dptjpg;
+		}
+
+		const getOrientation = buffer => {
+			const dv = new DataView(buffer)
+			let app1MarkerStart = 2
+			// ���� JFIF �� APP0 Marker ������ꍇ�� APP1 Marker �̎擾�ʒu�����炷
+			if (dv.getUint16(app1MarkerStart) !== 65505) {
+				const length = dv.getUint16(4)
+				app1MarkerStart += length + 2
+			}
+			if (dv.getUint16(app1MarkerStart) !== 65505) {
+				return 0
+			}
+			// �G���f�B�A�����擾
+			const littleEndian = dv.getUint8(app1MarkerStart + 10) === 73
+			// �t�B�[���h�̐����m�F
+			const count = dv.getUint16(app1MarkerStart + 18, littleEndian)
+			for (let i = 0; i < count; i++) {
+				const start = app1MarkerStart + 20 + i * 12
+				const tag = dv.getUint16(start, littleEndian)
+				// Orientation �� Tag �� 274
+				if (tag === 274) {
+					// Orientation �� Type �� SHORT �Ȃ̂� 2byte �����ǂ�
+					return dv.getUint16(start + 8, littleEndian)
+				}
+			}
+			return 0
+		}
+
+		function loadfiletotex() {
+			//     cancelAnimationFrame(RunApp);
+			var file = files[filecur];
+			console.log(file)
+			var createObjectURL = window.URL && window.URL.createObjectURL ?
+				function (file) {
+					return window.URL.createObjectURL(file);
+				} : window.webkitURL && window.webkitURL.createObjectURL ?
+					function (file) {
+						return window.webkitURL.createObjectURL(file);
+					} : undefined;
+
+			img = document.createElement('img');
+			img.onload = function () {
+
+				var reader = new FileReader();
+				reader.readAsArrayBuffer(file);
+				reader.onloadend = function (evt) {
+					if (texture) texture.dispose();
+					texture = null;
+					if (textured) textured.dispose();
+					textured = null;
+
+					if (canvas == null) canvas = document.createElement('canvas');
+					canvas.height = img.height;
+					canvas.width = img.width;
+					var ctx = canvas.getContext('2d');
+					ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, img.width, img.height);
+					texture = new THREE.Texture(canvas);
+					texture.flipY = true;
+					texture.needsUpdate = true;
+					const h = 1;
+					const w = (10 * img.width) / (16 * img.height);
+					plane.scale.set(w, h, 1);
+
+					const orientation = getOrientation(evt.target.result);
+					console.log(orientation);
+					if (orientation == 6) orient = 1;
+					else if (orientation == 3) orient = 2;
+					else if (orientation == 8) orient = 3;
+					else orient = 0;
+
+					var u8aDepth = new Uint8Array(evt.target.result);
+					var u8aPicture = depthtojpg(u8aDepth);
+					if (u8aPicture != null) {
+						var blob = new Blob([u8aPicture], { type: 'image\/jpeg' });
+						var bloburl = window.URL.createObjectURL(blob);
+						img = new Image();
+						img.src = bloburl;
+						img.onload = function () {
+							if (canvasr == null) canvasr = document.createElement('canvas');
+							canvasr.height = img.height;
+							canvasr.width = img.width;
+							var ctxr = canvasr.getContext('2d');
+							ctxr.drawImage(img, 0, 0, img.width, img.height, 0, 0, img.width, img.height);
+							textured = new THREE.Texture(canvasr);
+							textured.flipY = true;
+							textured.needsUpdate = true;
+							URL.revokeObjectURL(bloburl);
+						}
+					}
+					else {
+						if (texture) texture.dispose();
+						texture = null;
+						texture = loadtex('errore.jpg');
+						textured = loadtex('errore.jpg');
+						plane.scale.set(1, 1, 1);
+
+					}
+				}
+				//	RunApp();
+			};
+			img.src = createObjectURL(file);
+
+		};
+
+		document.addEventListener('mousedown', function (e) {
+			e.preventDefault();
+			mousedown = true;
+			onPointerDownPointerX0 = e.clientX;
+			onPointerDownPointerY0 = e.clientY;
+		});
+		document.addEventListener('mousemove', function (e) {
+			e.preventDefault();
+			if (mousedown) {
+				var dx = onPointerDownPointerX0 - e.clientX;
+				var dy = onPointerDownPointerY0 - e.clientY;
+				curx = curx + dx * 0.07;
+				cury = cury - dy * 0.07;
+				camera.position.set(curx, cury, 70);
+				onPointerDownPointerX0 = e.clientX;
+				onPointerDownPointerY0 = e.clientY;
+			}
+		});
+		document.addEventListener('mouseup', function (e) {
+			e.preventDefault();
+			mousedown = false;
+		});
+
+
+		zoomCamera = function (val) {
+			zoom += val * 0.02;
+			if (zoom < 5) zoom = 5;
+			if (zoom > 150) zoom = 150;
+			camera.fov = zoom;
+			camera.updateProjectionMatrix();
+		}
+		// chrome / safari / IE
+		window.onmousewheel = function (e) {
+			var delta = e.deltaY ? e.deltaY : e.wheelDelta ? -e.wheelDelta :
+				-e.wheelDeltaY * 0.2;
+			zoomCamera(delta);
+			//     e.preventDefault();
+		};
+		// firefox
+		window.addEventListener("DOMMouseScroll", function (e) {
+			zoomCamera(e.detail * 5);
+			e.preventDefault();
+		});
+		window.addEventListener("dblclick", function (e) {
+			curx = 0;
+			cury = 0;
+			zoom = 40;
+			camera.position.set(curx, cury, 70);
+			zoomCamera(0);
+		}, false);
+
+		//Resize window on size change
+		window.addEventListener('resize', function () {
+			var width = window.innerWidth;
+			var height = window.innerHeight;
+			renderer.setSize(width, height);
+			camera.aspect = width / height;
+			camera.updateProjectionMatrix();
+		});
+
+
+		var onDropFile = function (event) {
+			console.log(event)
+			event.preventDefault();
+			files = event.dataTransfer.files; // FileList object
+			socket.emit('drop', files);
+			if (files.length > 0) {
+				filenum = files.length;
+				filecur = 0;
+				loadfiletotex();
+			}
+		};
+
+		const importFile = document.getElementById("file-browser");
+		importFile.addEventListener("change", handleFiles, false);
+		function handleFiles() {
+			socket.emit('upload', files);
+			files = this.files; 
+			if (files.length > 0) {
+				filenum = files.length;
+				filecur = 0;
+				loadfiletotex();
+			}
+		}
+
+		socket.on('new file', function(msg){
+			console.log('p:'+msg);
+		});
+		function renderNewFile(f){
+			files = f; 
+			if (files.length > 0) {
+				filenum = files.length;
+				filecur = 0;
+				loadfiletotex();
+			}
+		}
+
+		var onCancel = function (ev) {            // �f�t�H���������L�����Z��
+			if (ev.preventDefault) { ev.preventDefault(); }
+			return false;
+		};
+
+		function loadtex(file) {
+			var tex = new THREE.TextureLoader().load(file);
+			tex.minFilter = THREE.LinearFilter;
+			tex.magFilter = THREE.LinearFilter;
+			tex.format = THREE.RGBFormat;
+			return tex;
+		}
+
+		function fromjsfnc(keycode) {
+			//        console.log(keycode);
+			if (keycode === 82) {		//R�L�[�F���Z�b�g
+				curx = 0;
+				cury = 0;
+				zoom = 40;
+				camera.position.set(curx, cury, 70);
+				zoomCamera(0);
+			}
+			if (keycode === 32) {
+				imgpaging(1);
+			}
+			if (keycode === 8) {
+				imgpaging(-1);
+			}
+			if (keycode === 75) {
+				orient++;
+				if (orient > 3) orient = 0;
+			}
+		}
+
+		//Add button presses
+		document.addEventListener('buttonPressed', function (e) {
+			// console.log("Pressed: " + e.name);
+			if (btnenable) {
+				btnenable = false;
+				if (e.name == "left") {
+					setTimeout(ClearFlag, 500);
+					imgpaging(-1);
+				} else if (e.name == "right") {
+					setTimeout(ClearFlag, 500);
+					imgpaging(1);
+				} else if (e.name == "square") {
+					setTimeout(ClearFlag, 50);
+					HoloPlay.valuerest(-1);
+				} else if (e.name == "circle") {
+					setTimeout(ClearFlag, 50);
+					HoloPlay.valuerest(1);
+				}
+			}
+		});
+
+		var ClearFlag = function () {
+			btnenable = true;
+		};
+
+		function imgpaging(borf) {
+			if (filenum > 1) {
+				filecur = filecur + borf;
+				if (filecur > (filenum - 1)) filecur = 0;
+				if (filecur < 0) filecur = filenum - 1;
+				loadfiletotex();
+			}
+		}
+
+		//Render the scene
+		function draw() {
+			if (orient == 1) plane.rotation.z = Math.PI * 3 / 2;
+			else if (orient == 2) plane.rotation.z = Math.PI;
+			else if (orient == 3) plane.rotation.z = Math.PI / 2;
+			else plane.rotation.z = 0;
+
+			material.map = texture;
+			material.needsUpdate = true;
+			holoplay.render0(scene, camera);
+			material.map = textured;
+			material.needsUpdate = true;
+			holoplay.render(scene, camera);
+			//	renderer.render(scene, camera);
+		}
+
+		//Game loop
+		function RunApp() {
+			requestAnimationFrame(RunApp);
+			draw();
+		}
+
+		init();
+		RunApp();
+
+	</script>
+</body>
+
+</html>
