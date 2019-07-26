@@ -4,18 +4,17 @@
     <title>LKG iphone protrait</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      body { font: 13px Helvetica, Arial; }
-      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
-      form input { border: 0; padding: 10px; width: 90%; margin-right: .5%; }
-      form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages li { padding: 5px 10px; }
-      #messages li:nth-child(odd) { background: #eee; }
+      body { font: 24px Helvetica, Arial; margin: 50px; padding: 50px;}
+      
+      button { height: 200px; font-size: 36px; padding: 30px;}
     </style>
   </head>
   <body>
-        <input type="file" id="file-browser" name="file">
-        <a href="/portraite">I am looking glass</a>
+        <h3>Hello,,,,</h3>
+        <input type="file" id="file-browser" name="file" width="200" height="200">
+        <hr>
+        <br style="margin: 100px 0">
+        <a href="/portraite"><button>I am in looking glass</button></a>
     
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -44,7 +43,7 @@
       var img = document.createElement('img');
       img.setAttribute('src', message.name);
       img.setAttribute('height', '100px');
-      document.body.appendChild(img);
+      document.body.appendChild('<h3>photo showing in LKG!</h3>');
     });
 
     
