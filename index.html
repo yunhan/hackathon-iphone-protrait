@@ -1,7 +1,7 @@
 <!doctype html>
 <html>
   <head>
-    <title>Socket.IO chat</title>
+    <title>LKG iphone protrait</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { font: 13px Helvetica, Arial; }
@@ -16,21 +16,55 @@
   <body>
         <input type="file" id="file-browser" name="file">
         <a href="/portraite">I am looking glass</a>
-    <ul id="messages"></ul>
-    <form action="">
-      <input id="m" autocomplete="off" /><button>Send</button>
-    </form>
+    
     <script src="/socket.io/socket.io.js"></script>
     <script>
     var socket = io();
     
-    const importFile = document.getElementById("file-browser");
-    importFile.addEventListener("change", handleFiles, false);
+    var file = document.getElementById("file-browser");
+    // importFile.addEventListener("change", handleFiles, false);
+
+    file.addEventListener('change', function () {
+      if (!file.files.length) {
+      return;
+                }
+      var firstFile = file.files[0],
+      reader = new FileReader();
+      reader.onloadend = function () {
+        console.log('----', reader.result)
+      socket.emit('new file', {
+      name: firstFile.name,
+      data: reader.result
+                    });
+                };
+      reader.readAsArrayBuffer(firstFile);
+            });
+
+      socket.on('new file', function (message) {
+      var img = document.createElement('img');
+      img.setAttribute('src', message.name);
+      img.setAttribute('height', '100px');
+      document.body.appendChild(img);
+    });
+
+    
+
+
     function handleFiles() {
+        if (!this.files.length) {
+          return
+        }
         const fileList = this.files; 
-        const path = fileList[0].path;
-        console.log(fileList)
-        socket.emit('new file', path);
+        reader = new FileReader();
+        reader.onloadend = function(){
+          console.log('loaded')
+          socket.emit('new file', {
+          name: fileList[0].name,
+          data: reader.result
+        });
+        reader.readAsArrayBuffer(fileList[0])
+        }
+        
     }
 
     

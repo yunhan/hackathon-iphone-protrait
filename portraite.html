@@ -19,8 +19,6 @@
 </head>
 
 <body>
-	<input type="file" id="file-browser" name="file">
-
 	<script src="js/three.js"></script>
 	<script src="js/holoplaydpt.js?" + new Date().getTime()></script>
 	<script src="/socket.io/socket.io.js"></script>
@@ -36,6 +34,27 @@
 		});
 
 
+		socket.on('new file', function(msg){
+			console.log('I got ', msg)
+
+			// files = new File([""], "temp.jpg", msg.file); 
+			// new File([originalFile], newname)
+			// files = new File([msg.data],'img')
+			
+			// files = msg;
+			// url = msg.name;
+			// if (files.length > 0) {
+			// 	filenum = files.length;
+			// 	filecur = 0;
+			// 	loadfiletotex();
+			// }
+
+			var img = document.createElement('img');
+			img.setAttribute('src', msg.name);
+			img.setAttribute('height', '100px');
+			document.body.innerHTML = "";
+			document.body.appendChild(img)
+		});
 
 		//Basic elements for a Three.js/HoloPlay scene
 		var scene, camera, renderer, holoplay;
@@ -66,6 +85,8 @@
 		var cury = 0;
 		var btnenable = true;
 		var orient = 0;
+
+		var url;
 
 		//Initialize our variables
 		function init() {
@@ -324,30 +345,6 @@
 				loadfiletotex();
 			}
 		};
-
-		const importFile = document.getElementById("file-browser");
-		importFile.addEventListener("change", handleFiles, false);
-		function handleFiles() {
-			socket.emit('upload', files);
-			files = this.files; 
-			if (files.length > 0) {
-				filenum = files.length;
-				filecur = 0;
-				loadfiletotex();
-			}
-		}
-
-		socket.on('new file', function(msg){
-			console.log('p:'+msg);
-		});
-		function renderNewFile(f){
-			files = f; 
-			if (files.length > 0) {
-				filenum = files.length;
-				filecur = 0;
-				loadfiletotex();
-			}
-		}
 
 		var onCancel = function (ev) {            // �f�t�H���������L�����Z��
 			if (ev.preventDefault) { ev.preventDefault(); }
